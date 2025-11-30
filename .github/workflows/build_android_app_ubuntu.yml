@@ -24,8 +24,7 @@ jobs:
       # 3) Instalar workloads MAUI y Android
       - name: Install MAUI workload
         run: |
-          dotnet workload install maui 
-          dotnet workload install android --skip-sign-check
+          dotnet workload install maui
 
       - name: Install Android dependencies
         run: |
