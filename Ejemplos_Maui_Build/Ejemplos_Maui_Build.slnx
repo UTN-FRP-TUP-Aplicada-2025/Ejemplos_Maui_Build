@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/.github/" />
+  <Folder Name="/.github/workflows/">
+    <File Path="../.github/workflows/build_android_app.yml" />
+  </Folder>
+  <Project Path="Ejemplo_Build/Ejemplo_Build.csproj">
+    <Deploy Solution="Debug|*" />
+  </Project>
+</Solution>

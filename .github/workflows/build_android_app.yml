@@ -1,0 +1,48 @@
+name: Build MAUI Android
+
+on:
+  push:
+    branches: [ main ]
+  
+  workflow_dispatch:   # Permite ejecutarlo manualmente desde Actions
+
+jobs:
+  build-android:
+    runs-on: windows-latest
+
+    steps:
+      # 1) Descargar el código del repo
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2) Instalar .NET 10
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # 3) Instalar workloads MAUI y Android
+      - name: Install workloads
+        run: |
+          dotnet workload install maui
+          dotnet workload install android
+
+      # 4) Restaurar dependencias
+      - name: Restore
+        run: dotnet restore
+
+      # 5) Compilar MAUI Android Release
+      - name: Build MAUI Android
+        run: dotnet build YourProjectName.csproj -c Release -f net10.0-android
+
+      # 6) Buscar el APK generado
+      - name: List output
+        run: dir **\*.apk /s
+
+      # 7) Subir el APK como artefacto
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MAUI-APK
+          path: |
+            **\bin\Release\net10.0-android\*\*.apk
