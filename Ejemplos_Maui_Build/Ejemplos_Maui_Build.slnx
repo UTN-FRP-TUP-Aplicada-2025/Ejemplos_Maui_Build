@@ -3,6 +3,7 @@
   <Folder Name="/.github/workflows/">
     <File Path="../.github/workflows/build_android_app_ubuntu.yml" />
     <File Path="../.github/workflows/build_android_app_windows.yml" />
+    <File Path="../.github/workflows/build_ios_app_ios.yml" />
   </Folder>
   <Project Path="Ejemplo_Build/Ejemplo_Build.csproj">
     <Deploy Solution="Debug|*" />

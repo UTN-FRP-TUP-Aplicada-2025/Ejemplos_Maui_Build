@@ -1,0 +1,118 @@
+name: Build MAUI iOS
+
+on:
+  #push:
+  #  branches: [ main ]
+
+  workflow_dispatch:
+    inputs:
+      configuration:
+        type: choice
+        description: Build configuration
+        default: Release
+        options:
+          - Release
+          - Debug
+
+jobs:
+  build-ios:
+    runs-on: macos-13  # Necesario para Xcode
+
+    steps:
+
+      # 1. Checkout
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Instalar .NET
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # 3. Instalar workloads MAUI
+      - name: Install workloads
+        run: |
+          dotnet workload install maui
+          dotnet workload install ios
+
+      # 4. Versioning
+      - name: Load and increment version
+        id: versioning
+        shell: pwsh
+        run: |
+          $versionPath = "version.txt"
+          $version = Get-Content $versionPath
+          $parts = $version.Split(".")
+          $major = [int]$parts[0]
+          $minor = [int]$parts[1]
+          $patch = [int]$parts[2] + 1
+
+          $newVersion = "$major.$minor.$patch"
+
+          # VersionCode iOS (CFBundleVersion)
+          $versionCode = (Get-Date).ToString("yyyyMMddHHmm")
+
+          Set-Content $versionPath $newVersion
+
+          echo "newVersion=$newVersion" >> $env:GITHUB_OUTPUT
+          echo "versionCode=$versionCode" >> $env:GITHUB_OUTPUT
+
+      # 5. Commit de la nueva versión
+      - name: Commit version bump
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Bump version to ${{ steps.versioning.outputs.newVersion }}"
+
+      # 6. Decodificar certificado P12
+      - name: Decode Certificate
+        run: |
+          echo "${{ secrets.IOS_CERTIFICATE_P12 }}" | base64 --decode > ios_certificate.p12
+
+      # 7. Decodificar provisioning profile
+      - name: Decode Provisioning Profile
+        run: |
+          echo "${{ secrets.IOS_PROVISIONING_PROFILE }}" | base64 --decode > profile.mobileprovision
+
+      # 8. Importar certificado al llavero
+      - name: Import certificate to keychain
+        run: |
+          security create-keychain -p "" build.keychain
+          security import ios_certificate.p12 -k ~/Library/Keychains/build.keychain -P "${{ secrets.IOS_CERTIFICATE_PASSWORD }}" -T /usr/bin/codesign
+          security list-keychains -d user -s ~/Library/Keychains/build.keychain
+          security default-keychain -d user -s ~/Library/Keychains/build.keychain
+          security unlock-keychain -p "" ~/Library/Keychains/build.keychain
+          security set-keychain-settings -t 3600 -l ~/Library/Keychains/build.keychain
+
+      # 9. Instalar provisioning profile
+      - name: Install Provisioning Profile
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      # 10. Build IPA firmado
+      - name: Build Signed iOS IPA
+        run: |
+          dotnet publish Ejemplos_Maui_Build/Ejemplo_Build/Ejemplo_Build.csproj \
+            -c ${{ github.event.inputs.configuration }} \
+            -f net10.0-ios \
+            -p:ApplicationVersion="${{ steps.versioning.outputs.newVersion }}" \
+            -p:ApplicationDisplayVersion="${{ steps.versioning.outputs.newVersion }}" \
+            -p:CFBundleVersion="${{ steps.versioning.outputs.versionCode }}" \
+            -p:CodesignKey="Apple Distribution" \
+            -p:CodesignProvision="${{ secrets.APPLE_BUNDLE_IDENTIFIER }}" \
+            -p:RuntimeIdentifier=ios-arm64 \
+            -p:BuildIpa=true
+
+      # 11. Listar el IPA generado
+      - name: List IPA
+        run: |
+          find . -name "*.ipa"
+
+      # 12. Subir artefacto
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: MAUI-iOS-${{ github.event.inputs.configuration }}
+          path: |
+            **/*.ipa
